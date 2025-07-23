@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Image Uploader</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(145deg, #0f0f0f, #2c2c2c);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #fff;
+    }
+
+    .glass-card {
+      background: rgba(255, 255, 255, 0.07);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 20px;
+      padding: 35px 40px;
+      max-width: 450px;
+      width: 100%;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+      text-align: center;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    h2 {
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+
+    input[type="file"], select, button {
+      width: 100%;
+      margin: 10px 0;
+      padding: 12px;
+      font-size: 15px;
+      border: none;
+      border-radius: 8px;
+      outline: none;
+    }
+
+    input[type="file"], select {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+    }
+
+    button {
+      background-color: #ffffff;
+      color: #000;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background-color: #dddddd;
+    }
+
+    .preview img {
+      width: 100%;
+      max-height: 300px;
+      margin-top: 15px;
+      border-radius: 10px;
+    }
+
+    .response {
+      margin-top: 20px;
+      font-size: 14px;
+    }
+
+    .success { color: #80ff80; }
+    .error { color: #ff7070; }
+  </style>
+</head>
+<body>
+  <div class="glass-card">
+    <h2>Upload an Image</h2>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <input type="file" name="image" id="imageInput" accept="image/*" required />
+      <select name="scale" id="scaleOption">
+        <option value="100">Scale: 100%</option>
+        <option value="75">Scale: 75%</option>
+        <option value="50">Scale: 50%</option>
+      </select>
+      <button type="submit">Upload</button>
+    </form>
+
+    <div class="preview" id="previewContainer"></div>
+    <div class="response" id="responseMessage"></div>
+  </div>
+
+  <script>
+    const form = document.getElementById('uploadForm');
+    const imageInput = document.getElementById('imageInput');
+    const scaleOption = document.getElementById('scaleOption');
+    const previewContainer = document.getElementById('previewContainer');
+    const responseMessage = document.getElementById('responseMessage');
+
+    imageInput.addEventListener('change', () => {
+      previewContainer.innerHTML = '';
+      const file = imageInput.files[0];
+      if (file) {
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        previewContainer.appendChild(img);
+      }
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      responseMessage.innerHTML = '⏳ Uploading...';
+
+      const file = imageInput.files[0];
+      const scale = scaleOption.value;
+
+      if (!file) {
+        responseMessage.innerHTML = '<div class="error">Please select an image.</div>';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('scale', scale);
+
+      try {
+        const res = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await res.json();
+
+        if (res.ok && data.filename) {
+          responseMessage.innerHTML = `
+            <div class="success">
+              ✅ <strong>${data.message}</strong><br/>
+              📁 Saved: <code>${data.filename}</code><br/>
+              ⬇️ Downloading automatically...
+            </div>
+          `;
+          previewContainer.innerHTML = '';
+          form.reset();
+
+          // Automatically download the image
+          setTimeout(() => {
+            const a = document.createElement('a');
+            a.href = `/download/${data.filename}`;
+            a.download = data.filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          }, 1000); // Delay to allow S3 propagation
+
+        } else {
+          responseMessage.innerHTML = `<div class="error">❌ ${data.error || 'Upload failed.'}</div>`;
+        }
+      } catch (err) {
+        console.error(err);
+        responseMessage.innerHTML = '<div class="error">❌ Something went wrong. Try again.</div>';
+      }
+    });
+  </script>
+</body>
+</html>
